@@ -1,0 +1,147 @@
+name: iee305-l18
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      COURSE_HOST: ${COURSE_HOST:?Set COURSE_HOST in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [frontend]
+    depends_on:
+      librechat:
+        condition: service_healthy
+    logging: *logging
+
+  librechat:
+    # All-in-one frontend/backend image, pinned to the inspected multiarch digest.
+    image: ghcr.io/danny-avila/librechat@sha256:c5db3331b845e1f289f8d04c0c77936c4bbe372f76730a804abc1c37e44d23a9
+    restart: unless-stopped
+    init: true
+    command: ["/bin/sh", "-c", "node /app/config/course-render.cjs && exec npm run backend"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3080"
+      NODE_ENV: production
+      DOMAIN_CLIENT: https://${COURSE_HOST:?Set COURSE_HOST}
+      DOMAIN_SERVER: https://${COURSE_HOST:?Set COURSE_HOST}
+      TRUST_PROXY: "1"
+      APP_TITLE: IEE 305 — MCP Laboratory
+      CUSTOM_FOOTER: IEE 305 · Course demonstration
+      MONGO_URI: mongodb://course:${MONGO_PASSWORD:?Generate secrets with init_env.py}@mongodb:27017/LibreChat?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:?Generate secrets}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Generate secrets}
+      CREDS_KEY: ${CREDS_KEY:?Generate secrets}
+      CREDS_IV: ${CREDS_IV:?Generate secrets}
+      SEARCH: "false"
+      ENDPOINTS: custom
+      CREATEAI_API_KEY: ${CREATEAI_API_KEY:?Set CreateAI key}
+      CREATEAI_BASE_URL: ${CREATEAI_BASE_URL:?Set OpenAI-compatible CreateAI base URL}
+      CREATEAI_MODEL: ${CREATEAI_MODEL:?Set a tool-capable model ID}
+      ALLOW_EMAIL_LOGIN: "true"
+      ALLOW_REGISTRATION: "false"
+      ALLOW_SOCIAL_LOGIN: "false"
+      ALLOW_SOCIAL_REGISTRATION: "false"
+      ALLOW_EMAIL_CHANGE: "false"
+      ALLOW_PASSWORD_RESET: ${ALLOW_PASSWORD_RESET:-false}
+      ALLOW_UNVERIFIED_EMAIL_LOGIN: "false"
+      ALLOW_SHARED_LINKS_PUBLIC: "false"
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_ENCRYPTION: ${EMAIL_ENCRYPTION:-starttls}
+      EMAIL_USERNAME: ${EMAIL_USERNAME:-}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      EMAIL_FROM_NAME: IEE 305
+      DEBUG_LOGGING: "false"
+      DEBUG_CONSOLE: "false"
+      LIBRECHAT_TEMP_CREDENTIALS_PATH: /app/data/.env.temp
+    volumes:
+      - ./librechat.yaml:/app/config/course-librechat.yaml:ro
+      - ./scripts/render_config.cjs:/app/config/course-render.cjs:ro
+      - ./scripts/create_roster_users.cjs:/app/config/course-users.cjs:ro
+      - librechat_data:/app/data
+      - librechat_uploads:/app/uploads
+      - librechat_images:/app/client/public/images
+      - librechat_logs:/app/api/logs
+    networks: [frontend, accounts, tools]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      course-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    logging: *logging
+
+  mongodb:
+    image: mongo:8.0.20
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: course
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?Generate secrets}
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks: [accounts]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.adminCommand('ping').ok ? 0 : 1)"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    logging: *logging
+
+  course-mcp:
+    build: ./mcp
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      TAM_DATABASE: /data/tam.db
+      FASTMCP_HOME: /tmp/fastmcp
+    volumes:
+      - ./data/tam.db:/data/tam.db:ro
+    networks: [tools]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz', timeout=3)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+
+networks:
+  frontend: {}
+  accounts:
+    internal: true
+  tools:
+    internal: true
+
+volumes:
+  caddy_data:
+  caddy_config:
+  mongodb_data:
+  mongodb_config:
+  librechat_data:
+  librechat_uploads:
+  librechat_images:
+  librechat_logs:

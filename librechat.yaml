@@ -1,0 +1,105 @@
+version: 1.3.13
+cache: true
+
+endpoints:
+  custom:
+    - name: ASU CreateAI
+      apiKey: "${CREATEAI_API_KEY}"
+      baseURL: "${CREATEAI_BASE_URL}"
+      models:
+        default: ["${CREATEAI_MODEL}"]
+        fetch: false
+      titleConvo: false
+      modelDisplayLabel: ASU CreateAI
+
+# This is an explicit allowlist, including the private course service.
+mcpSettings:
+  allowedDomains:
+    - "http://course-mcp:8001"
+    - "https://developers.openai.com"
+
+mcpServers:
+  course:
+    type: streamable-http
+    url: http://course-mcp:8001/mcp
+    requiresOAuth: false
+    startup: true
+    chatMenu: false
+    timeout: 30000
+    initTimeout: 30000
+    serverInstructions: true
+  documentation:
+    type: streamable-http
+    url: https://developers.openai.com/mcp
+    requiresOAuth: false
+    startup: false
+    chatMenu: false
+    timeout: 30000
+    initTimeout: 30000
+
+interface:
+  customWelcome: "IEE 305: explore how an agent uses MCP tools."
+  modelSelect: false
+  parameters: false
+  presets: false
+  agents:
+    use: false
+    create: false
+    share: false
+    public: false
+  mcpServers:
+    use: true
+    create: false
+    share: false
+    public: false
+  runCode: false
+  webSearch: false
+  fileSearch: false
+  sharedLinks:
+    create: false
+    share: false
+    public: false
+
+# Three fixed choices, all using the same configured CreateAI model.
+# No manually created or shared Agent records are needed.
+modelSpecs:
+  enforce: true
+  prioritize: true
+  list:
+    - name: course-tools
+      label: Time-and-Motion Tools
+      description: Query the supplied lecture dataset through MCP.
+      default: true
+      mcpServers: [course]
+      preset:
+        endpoint: ASU CreateAI
+        model: "${CREATEAI_MODEL}"
+        promptPrefix: |
+          Use the time-and-motion tool for claims about the lecture database.
+          Report tool errors honestly. Recorded minutes can overlap and do not
+          establish productivity or elapsed shift length.
+    - name: comparison
+      label: Comparison — No Tools
+      description: The same model without MCP tools.
+      mcpServers: []
+      preset:
+        endpoint: ASU CreateAI
+        model: "${CREATEAI_MODEL}"
+        promptPrefix: |
+          You have no access to the course database in this conversation.
+          Do not invent current database contents.
+    - name: documentation
+      label: Documentation Tools
+      description: Use an existing public documentation MCP server.
+      mcpServers: [documentation]
+      preset:
+        endpoint: ASU CreateAI
+        model: "${CREATEAI_MODEL}"
+        promptPrefix: |
+          Use the documentation MCP tools to retrieve current documentation.
+          Cite the pages returned by the tools.
+
+fileConfig:
+  endpoints:
+    default:
+      disabled: true

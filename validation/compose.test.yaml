@@ -1,0 +1,20 @@
+services:
+  librechat:
+    ports: ["127.0.0.1:13080:3080"]
+    environment:
+      DOMAIN_CLIENT: http://localhost:13080
+      DOMAIN_SERVER: http://localhost:13080
+      EMAIL_HOST: mailpit
+      EMAIL_PORT: "1025"
+      EMAIL_ENCRYPTION: ""
+      EMAIL_USERNAME: test-smtp
+      EMAIL_PASSWORD: test-smtp-password
+      EMAIL_FROM: course@example.test
+      ALLOW_PASSWORD_RESET: "true"
+  mailpit:
+    image: axllent/mailpit:v1.27.8
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    networks: [frontend]
+    ports: ["127.0.0.1:18025:8025"]

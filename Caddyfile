@@ -1,0 +1,11 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$COURSE_HOST} {
+	encode zstd gzip
+	reverse_proxy librechat:3080 {
+		# Deliver streamed model output immediately.
+		flush_interval -1
+	}
+}
