@@ -77,11 +77,13 @@ services:
       - librechat_uploads:/app/uploads
       - librechat_images:/app/client/public/images
       - librechat_logs:/app/api/logs
-    networks: [frontend, accounts, tools]
+    networks: [frontend, accounts, tools, hw7_tools]
     depends_on:
       mongodb:
         condition: service_healthy
       course-mcp:
+        condition: service_healthy
+      hw7-mcp:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -129,11 +131,33 @@ services:
       retries: 5
     logging: *logging
 
+  hw7-mcp:
+    build: ./hw7-mcp
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      WAREHOUSE_DATABASE: /data/warehouse.db
+      FASTMCP_HOME: /tmp/fastmcp
+    volumes:
+      - ./data/hw7-warehouse.db:/data/warehouse.db:ro
+    networks: [hw7_tools]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz', timeout=3)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+
 networks:
   frontend: {}
   accounts:
     internal: true
   tools:
+    internal: true
+  hw7_tools:
     internal: true
 
 volumes:

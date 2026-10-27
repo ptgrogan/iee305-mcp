@@ -16,6 +16,7 @@ endpoints:
 mcpSettings:
   allowedDomains:
     - "http://course-mcp:8001"
+    - "http://hw7-mcp:8001"
     - "https://developers.openai.com"
 
 mcpServers:
@@ -28,6 +29,14 @@ mcpServers:
     timeout: 30000
     initTimeout: 30000
     serverInstructions: true
+  hw7:
+    type: streamable-http
+    url: http://hw7-mcp:8001/mcp
+    requiresOAuth: false
+    startup: true
+    chatMenu: false
+    timeout: 30000
+    initTimeout: 30000
   documentation:
     type: streamable-http
     url: https://developers.openai.com/mcp
@@ -60,7 +69,7 @@ interface:
     share: false
     public: false
 
-# Three fixed choices, all using the same configured CreateAI model.
+# Four fixed choices, all using the same configured CreateAI model.
 # No manually created or shared Agent records are needed.
 modelSpecs:
   enforce: true
@@ -98,6 +107,23 @@ modelSpecs:
         promptPrefix: |
           Use the documentation MCP tools to retrieve current documentation.
           Cite the pages returned by the tools.
+
+    - name: hw7-authorizations
+      label: HW-7 Warehouse Authorizations
+      description: Inspect the fixed HW-7 warehouse authorization records.
+      mcpServers: [hw7]
+      preset:
+        endpoint: ASU CreateAI
+        model: "${CREATEAI_MODEL}"
+        promptPrefix: |
+          Use the HW-7 warehouse tools for factual claims about employee
+          authorizations. Preserve exact IDs and recorded statuses. Distinguish
+          an existing employee with no authorizations from a missing employee
+          or missing employee-zone authorization. Report tool errors honestly.
+          The tools and database are read-only. Do not claim to create, update,
+          or delete records. A student's local HTTP API uses a separate database.
+          Recorded authorization status is not a comprehensive certification
+          or workplace safety assessment. Do not invent records or tool results.
 
 fileConfig:
   endpoints:

@@ -1,8 +1,8 @@
-# IEE 305 L-18: hosted LibreChat MCP demonstration
+# IEE 305 L-18 and HW-7: hosted LibreChat MCP exercises
 
 Updated October 26, 2026. Students need only a browser. This repository contains the complete deployment: clone or copy it to the EC2 host and run Docker Compose from the repository root.
 
-The hosted MCP server is in `mcp/` and its classroom database is in `data/`.
+The L-18 MCP server is in `mcp/`; the separate HW-7 warehouse server is in `hw7-mcp/`. Their fixed classroom databases are in `data/`.
 
 ## Components
 
@@ -11,7 +11,8 @@ The hosted MCP server is in `mcp/` and its classroom database is in `data/`.
 | caddy | HTTPS certificates and reverse proxy | 80, 443 |
 | librechat | Browser UI, accounts, CreateAI model connection, MCP client | None directly |
 | mongodb | Persistent accounts and conversations, with authentication | None |
-| course-mcp | FastMCP tool with direct SQLModel queries and read-only SQLite access | None |
+| course-mcp | L-18 time-and-motion tool with read-only SQLite access | None |
+| hw7-mcp | HW-7 warehouse authorization tools with a separate read-only SQLite snapshot | None |
 
 LibreChat reaches the CreateAI API and the public documentation MCP server over outbound HTTPS. It reaches the course MCP server through a private Docker network. The MCP tool queries its mounted SQLite file directly. Students receive neither model API keys nor direct database access.
 
@@ -60,7 +61,7 @@ docker compose ps
 
 Only Caddy publishes ports. Caddy obtains and renews certificates automatically once DNS and inbound connectivity are correct. Startup waits for the database, MCP server, and LibreChat health checks. Avoid publishing a second reverse proxy on the same host's ports 80/443.
 
-The renderer applies CREATEAI_MODEL to the three model choices and validates the YAML using the pinned LibreChat schema. It retains API credentials as environment references. Placeholder CreateAI values are rejected at startup.
+The renderer applies CREATEAI_MODEL to all four model choices and validates the YAML using the pinned LibreChat schema. It retains API credentials as environment references. Placeholder CreateAI values are rejected at startup.
 
 ## Instructor and student accounts
 
@@ -101,9 +102,10 @@ Students cannot create or share MCP servers or saved Agents through the supplied
 
 ## Classroom choices
 
-All three choices use CREATEAI_MODEL:
+All four choices use CREATEAI_MODEL:
 
 - **Time-and-Motion Tools:** the course get_operator_summary tool.
+- **HW-7 Warehouse Authorizations:** employee authorization lookups against the separate homework snapshot.
 - **Comparison — No Tools:** the same model with no attached MCP tools.
 - **Documentation Tools:** the existing public documentation MCP service at https://developers.openai.com/mcp.
 
@@ -152,7 +154,7 @@ The smoke test checks the output schema, structured results, and actual MCP call
 Then test in the browser with a normal student account:
 
 1. Login and password reset both work; self-registration is unavailable.
-2. The three configured choices are visible, and student server/agent creation is unavailable.
+2. The four configured choices are visible, and student server/agent creation is unavailable.
 3. A real CreateAI request streams successfully.
 4. The model selects the course tool, receives results, and answers from them. Plain chat success alone does not verify tool calling.
 5. Inspect tool arguments and returned values. Confirm a fresh Comparison conversation has no course tool.
@@ -161,17 +163,44 @@ Then test in the browser with a normal student account:
 
 No real CreateAI request is made by the supplied scripts. Its credentials, model behavior, quotas, and delivery to actual ASU inboxes must be rehearsed on the deployed service.
 
+## HW-7 warehouse exercise
+
+Select **HW-7 Warehouse Authorizations** in a new conversation. This file-configured choice is the homework agent; no saved Agent record needs to be created or shared. It uses the existing `CREATEAI_MODEL` and only the `hw7` MCP server.
+
+The two tools are:
+
+- `get_employee_authorizations(employee_id)`: an employee name, authorization count, and list of authorizations. An existing employee with no records returns zero and an empty list; a missing employee raises a tool error.
+- `get_authorization(employee_id, zone_code)`: the recorded status for one pair, or a tool error for a missing employee or authorization.
+
+`data/hw7-warehouse.db` is a copy of the common HW-6 starter, not a student's working database. It contains synthetic course records. The tools query only employee and authorization records. Their response classes, direct SQLModel queries, and FastMCP declarations are together in `hw7-mcp/server.py`; `models.py` supplies the existing table mappings. No create, update, delete, or arbitrary SQL tool is exposed. Both the SQLite URI and the Docker mount enforce read-only access. The service has its own internal network and publishes no host ports.
+
+From an existing EC2 deployment with these repository changes copied or pulled into place:
+
+```bash
+docker compose config --quiet
+docker compose up -d --build hw7-mcp
+docker compose exec hw7-mcp python smoke_test.py
+docker compose up -d --force-recreate librechat
+docker compose ps
+```
+
+Keep the existing private `.env` and volumes. Recreating LibreChat loads its new network, server allowlist, and fourth course choice. No new credentials or student installation is required.
+
+The smoke test checks discovery, required input fields, typed output schemas, all four baseline authorizations, an existing employee with no authorizations, missing records, missing arguments, absence of a write tool, SQLite and mount write rejection, and unchanged database bytes. It needs no model key. Run the original `docker compose exec course-mcp python smoke_test.py` as a regression check.
+
+Before releasing HW-7, sign in with a normal student account and rehearse the assignment's three tasks, including a follow-up tool lookup after a write request. Confirm that tool cards expose Parameters and results/errors for screenshots. Model wording and tool selection can vary; an answer alone does not prove a tool ran. The fixed homework data is unaffected by students' local HTTP API exercises. Detailed solutions and grading materials remain in the private course assignments folder.
+
 ## Operations
 
 ```bash
-docker compose logs --tail=100 librechat course-mcp
+docker compose logs --tail=100 librechat course-mcp hw7-mcp
 docker compose restart librechat
 docker compose down
 ```
 
 Use docker compose up -d --force-recreate librechat after changing .env; a restart alone does not update container environment variables. Rebuild after Python source changes with docker compose up -d --build course-mcp.
 
-Named volumes preserve MongoDB, LibreChat files, and Caddy certificate state across container replacement. The SQLite source remains in data/tam.db. Preserve .env securely alongside backups. Do not use docker compose down -v unless intentionally deleting the deployment's persisted data.
+Named volumes preserve MongoDB, LibreChat files, and Caddy certificate state across container replacement. The SQLite sources remain in data/tam.db and data/hw7-warehouse.db. Preserve .env securely alongside backups. Do not use docker compose down -v unless intentionally deleting the deployment's persisted data.
 
 For a consistent EC2/EBS backup, stop the stack, take snapshots of every volume holding the deployment and Docker data, and start it again. A live disk snapshot alone is not a tested application-consistent backup. Restore to a separate host and verify login and conversations before relying on the backup.
 

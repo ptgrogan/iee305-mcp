@@ -1,0 +1,6 @@
+*
+!Dockerfile
+!requirements.txt
+!server.py
+!models.py
+!smoke_test.py
